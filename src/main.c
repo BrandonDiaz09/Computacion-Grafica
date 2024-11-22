@@ -170,6 +170,33 @@ void update(void) {
             vec4_t transformed_point = vec4_from_vec3(verticesCara[j]);
             transformed_point = mat4_mul_vec4(world_matrix, transformed_point);
             transformed_points[j] = transformed_point;
+        }
+
+        // Calcular Back-face Culling
+        vec3_t a = vec3_from_vec4(transformed_points[0]);
+        vec3_t b = vec3_from_vec4(transformed_points[1]);
+        vec3_t c = vec3_from_vec4(transformed_points[2]);
+
+        // Calcular dos vectores de la cara
+        vec3_t ab = vec3_sub(b, a);
+        vec3_t ac = vec3_sub(c, a);
+
+        // Calcular la normal con el producto cruzado
+        vec3_t normal = vec3_cross(ab, ac);
+
+        // Dirección hacia la cámara (asumimos que es (0, 0, -1))
+        vec3_t camera_dir = {0, 0, -1};
+
+        // Producto punto entre la normal y la dirección de la cámara
+        float dot_product = vec3_dot(normal, camera_dir);
+
+        // Si el producto punto es menor o igual a 0, no se renderiza
+        if (dot_product < 0) {
+            continue;
+        }
+
+        // Proyección en pantalla
+        for (int j = 0; j < 3; j++) {
             vec2_t projected_point = project(vec3_from_vec4(transformed_points[j]));
             projected_points[j] = projected_point;
             projected_points[j].x += (window_width / 2);
@@ -179,7 +206,8 @@ void update(void) {
         triangle_t trianguloProyectado = {
             .points[0] = projected_points[0],
             .points[1] = projected_points[1],
-            .points[2] = projected_points[2]
+            .points[2] = projected_points[2],
+            .depth = (transformed_points[0].z + transformed_points[1].z + transformed_points[2].z) / 3
         };
 
         array_push(ArrayTriangle, trianguloProyectado);
@@ -209,7 +237,8 @@ void render(void) {
             triangle_t tempTriangle = ArrayTriangle[i];
 
             // Seleccionar un color fijo de forma cíclica
-            uint32_t color = colors[i % num_colors];
+             uint32_t color = colors[i % num_colors];
+            //uint32_t color =0xFF00FFFF;
 
             draw_filled_triangle(
                 tempTriangle.points[0].x, tempTriangle.points[0].y,
@@ -223,11 +252,12 @@ void render(void) {
     // Renderizado de aristas
     if (render_edges) {
         for (int i = 0; i < array_length(ArrayTriangle); i++) {
+            int32_t color = colors[i % num_colors];
             triangle_t tempTriangle = ArrayTriangle[i];
-            draw_triangle(tempTriangle.points[0].x, tempTriangle.points[0].y,
+            /*draw_triangle(tempTriangle.points[0].x, tempTriangle.points[0].y,
                           tempTriangle.points[1].x, tempTriangle.points[1].y,
                           tempTriangle.points[2].x, tempTriangle.points[2].y,
-                          0xFFFFFF00); // Color de las aristas
+                          0x3498DB); // Color de las aristas*/
         }
     }
 
