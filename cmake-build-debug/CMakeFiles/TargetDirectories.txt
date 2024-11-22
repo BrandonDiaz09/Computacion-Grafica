@@ -1,0 +1,3 @@
+/Users/brandondiaz/CLionProjects/practica3/cmake-build-debug/CMakeFiles/sdl2_basic.dir
+/Users/brandondiaz/CLionProjects/practica3/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/brandondiaz/CLionProjects/practica3/cmake-build-debug/CMakeFiles/rebuild_cache.dir
