@@ -21,7 +21,7 @@ vec3_t cube_rotation = {0, 0, 0};
 vec3_t cube_translation = {0, 0, 0};
 vec3_t cube_scale = {1, 1, 1};
 
-float fov_factor = 320;
+float fov_factor = 250;
 bool is_running = false;
 int previous_frame_time = 0;
 
@@ -130,6 +130,15 @@ vec2_t project(vec3_t v3) {
     return projected_point;
 }
 
+int compare_triangles(const void* a, const void* b) {
+    const triangle_t* tri1 = (const triangle_t*)a;
+    const triangle_t* tri2 = (const triangle_t*)b;
+
+    if (tri1->depth < tri2->depth) return -1; // tri1 viene antes
+    if (tri1->depth > tri2->depth) return 1;  // tri2 viene antes
+    return 0;                                // Son iguales
+}
+
 void update(void) {
     ArrayTriangle = NULL;
     cube_rotation.x += 0.01;
@@ -177,25 +186,24 @@ void update(void) {
         vec3_t b = vec3_from_vec4(transformed_points[1]);
         vec3_t c = vec3_from_vec4(transformed_points[2]);
 
-        // Calcular dos vectores de la cara
         vec3_t ab = vec3_sub(b, a);
         vec3_t ac = vec3_sub(c, a);
 
-        // Calcular la normal con el producto cruzado
+        // Calcular la normal del triángulo
         vec3_t normal = vec3_cross(ab, ac);
 
-        // Dirección hacia la cámara (asumimos que es (0, 0, -1))
+        // Dirección de la cámara (asumimos que mira hacia -Z)
         vec3_t camera_dir = {0, 0, -1};
 
         // Producto punto entre la normal y la dirección de la cámara
         float dot_product = vec3_dot(normal, camera_dir);
 
-        // Si el producto punto es menor o igual a 0, no se renderiza
+        // Si el triángulo está orientado hacia la cámara (producto punto positivo), se renderiza
         if (dot_product < 0) {
             continue;
         }
 
-        // Proyección en pantalla
+        // Proyectar los puntos
         for (int j = 0; j < 3; j++) {
             vec2_t projected_point = project(vec3_from_vec4(transformed_points[j]));
             projected_points[j] = projected_point;
@@ -203,6 +211,7 @@ void update(void) {
             projected_points[j].y += (window_height / 2);
         }
 
+        // Calcular el depth como el promedio de las coordenadas z de los puntos transformados
         triangle_t trianguloProyectado = {
             .points[0] = projected_points[0],
             .points[1] = projected_points[1],
@@ -212,7 +221,11 @@ void update(void) {
 
         array_push(ArrayTriangle, trianguloProyectado);
     }
+
+    // Ordenar los triángulos visibles por depth
+    qsort(ArrayTriangle, array_length(ArrayTriangle), sizeof(triangle_t), compare_triangles);
 }
+
 
 void render(void) {
     draw_grid();
@@ -254,10 +267,10 @@ void render(void) {
         for (int i = 0; i < array_length(ArrayTriangle); i++) {
             int32_t color = colors[i % num_colors];
             triangle_t tempTriangle = ArrayTriangle[i];
-            /*draw_triangle(tempTriangle.points[0].x, tempTriangle.points[0].y,
+            draw_triangle(tempTriangle.points[0].x, tempTriangle.points[0].y,
                           tempTriangle.points[1].x, tempTriangle.points[1].y,
                           tempTriangle.points[2].x, tempTriangle.points[2].y,
-                          0x3498DB); // Color de las aristas*/
+                          color); // Color de las aristas
         }
     }
 
