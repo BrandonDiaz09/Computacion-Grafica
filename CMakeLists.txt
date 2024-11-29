@@ -27,6 +27,8 @@ add_executable(
         src/mesh.c
         src/array.c
         src/array.h
+        src/lighting.h
+        src/lighting.c
 )
 
 target_link_libraries(${PROJECT_NAME} ${SDL2_LIBRARY})

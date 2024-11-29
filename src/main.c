@@ -11,6 +11,7 @@
 #include "triangle.h"
 #include "vector.h"
 #include "stb_ds.h"
+#include "lighting.h"
 
 #define N_POINTS (9*9*9)
 vec3_t cube_points[N_POINTS];
@@ -140,7 +141,7 @@ int compare_triangles(const void* a, const void* b) {
 }
 
 void update(void) {
-    ArrayTriangle = NULL;
+    ArrayTriangle = NULL; // Limpiar el array de triángulos
     cube_rotation.x += 0.01;
     cube_rotation.y += 0.01;
     cube_rotation.z += 0.01;
@@ -159,6 +160,12 @@ void update(void) {
     world_matrix = mat4_mul_mat4(rotation_matrix_y, world_matrix);
     world_matrix = mat4_mul_mat4(rotation_matrix_x, world_matrix);
     world_matrix = mat4_mul_mat4(translation_matrix, world_matrix);
+
+    // Dirección de la luz
+    vec3_t light_dir = {0, 0, 1};
+    vec3_normalize(&light_dir); // Normalizar dirección de la luz
+
+    light_t light = { .direction = light_dir };
 
     for (int i = 0; i < array_length(mesh.faces); i++) {
         int verticeCara[3] = {
@@ -181,7 +188,6 @@ void update(void) {
             transformed_points[j] = transformed_point;
         }
 
-        // Calcular Back-face Culling
         vec3_t a = vec3_from_vec4(transformed_points[0]);
         vec3_t b = vec3_from_vec4(transformed_points[1]);
         vec3_t c = vec3_from_vec4(transformed_points[2]);
@@ -191,17 +197,12 @@ void update(void) {
 
         // Calcular la normal del triángulo
         vec3_t normal = vec3_cross(ab, ac);
+        vec3_normalize(&normal); // Normalizar la normal
 
-        // Dirección de la cámara (asumimos que mira hacia -Z)
-        vec3_t camera_dir = {0, 0, -1};
+        // Calcular la intensidad de luz
+        float light_intensity = -vec3_dot(normal, light.direction);
 
-        // Producto punto entre la normal y la dirección de la cámara
-        float dot_product = vec3_dot(normal, camera_dir);
-
-        // Si el triángulo está orientado hacia la cámara (producto punto positivo), se renderiza
-        if (dot_product < 0) {
-            continue;
-        }
+        if (light_intensity < 0) continue; // Ignorar triángulos orientados hacia atrás
 
         // Proyectar los puntos
         for (int j = 0; j < 3; j++) {
@@ -211,18 +212,19 @@ void update(void) {
             projected_points[j].y += (window_height / 2);
         }
 
-        // Calcular el depth como el promedio de las coordenadas z de los puntos transformados
-        triangle_t trianguloProyectado = {
+        triangle_t triangle = {
             .points[0] = projected_points[0],
             .points[1] = projected_points[1],
             .points[2] = projected_points[2],
-            .depth = (transformed_points[0].z + transformed_points[1].z + transformed_points[2].z) / 3
+            .depth = (a.z + b.z + c.z) / 3
         };
 
-        array_push(ArrayTriangle, trianguloProyectado);
+        // Aplicar flat shading
+        triangle.color = light_apply_intensity(0xFFFFFF, light_intensity);
+
+        array_push(ArrayTriangle, triangle);
     }
 
-    // Ordenar los triángulos visibles por depth
     qsort(ArrayTriangle, array_length(ArrayTriangle), sizeof(triangle_t), compare_triangles);
 }
 
@@ -231,33 +233,18 @@ void render(void) {
     draw_grid();
 
     // Renderizado de triángulos
-    uint32_t colors[] = {
-        0xFFFF0000, // Rojo
-        0xFF00FF00, // Verde
-        0xFF0000FF, // Azul
-        0xFFFFFF00, // Amarillo
-        0xFFFF00FF, // Magenta
-        0xFF00FFFF, // Cian
-        0xFFFFFFFF, // Blanco
-        0xFF888888  // Gris
-    };
-
-    // Obtener la cantidad de colores
-    int num_colors = sizeof(colors) / sizeof(colors[0]);
-
     if (render_triangles) {
         for (int i = 0; i < array_length(ArrayTriangle); i++) {
             triangle_t tempTriangle = ArrayTriangle[i];
 
-            // Seleccionar un color fijo de forma cíclica
-             uint32_t color = colors[i % num_colors];
-            //uint32_t color =0xFF00FFFF;
+            // Usar el color calculado durante el flat shading
+            uint32_t color = tempTriangle.color;
 
             draw_filled_triangle(
                 tempTriangle.points[0].x, tempTriangle.points[0].y,
                 tempTriangle.points[1].x, tempTriangle.points[1].y,
                 tempTriangle.points[2].x, tempTriangle.points[2].y,
-                color // Color fijo para el triángulo
+                color
             );
         }
     }
@@ -265,26 +252,18 @@ void render(void) {
     // Renderizado de aristas
     if (render_edges) {
         for (int i = 0; i < array_length(ArrayTriangle); i++) {
-            int32_t color = colors[i % num_colors];
             triangle_t tempTriangle = ArrayTriangle[i];
-            draw_triangle(tempTriangle.points[0].x, tempTriangle.points[0].y,
-                          tempTriangle.points[1].x, tempTriangle.points[1].y,
-                          tempTriangle.points[2].x, tempTriangle.points[2].y,
-                          color); // Color de las aristas
+
+            draw_triangle(
+                tempTriangle.points[0].x, tempTriangle.points[0].y,
+                tempTriangle.points[1].x, tempTriangle.points[1].y,
+                tempTriangle.points[2].x, tempTriangle.points[2].y,
+                0xFF888888 // Color gris para las aristas
+            );
         }
     }
 
-    // // Renderizado de vértices
-    // if (render_vertices) {
-    //     for (int i = 0; i < array_length(ArrayTriangle); i++) {
-    //         triangle_t tempTriangle = ArrayTriangle[i];
-    //         draw_pixel(tempTriangle.points[0].x, tempTriangle.points[0].y, 0xFFFF0000); // Vértice 1 en rojo
-    //         draw_pixel(tempTriangle.points[1].x, tempTriangle.points[1].y, 0xFFFF0000); // Vértice 2 en rojo
-    //         draw_pixel(tempTriangle.points[2].x, tempTriangle.points[2].y, 0xFFFF0000); // Vértice 3 en rojo
-    //     }
-    // }
-    // Dibujar los vértices si `show_vertices` es verdadero
-    // Renderizado de vértices (con transformación)
+    // Renderizado de vértices
     if (render_vertices) {
         // Crear las matrices de transformación
         mat4_t scale_matrix = mat4_make_scale(cube_scale.x, cube_scale.y, cube_scale.z);
