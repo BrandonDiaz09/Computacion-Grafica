@@ -34,7 +34,11 @@ int typeOfFigure = 2; // 0 = cube, 1 = circle, 2 .obj
 bool render_triangles = true;
 bool render_vertices = false;
 bool render_edges = true;
-bool perspective_projection = true;
+bool perspective_projection = false;
+
+bool use_flat_shading = true; // Control para activar/desactivar Flat Shading
+vec3_t camera_dir = {0, 0, -1}; // Dirección de la cámara (usada en Back-face Culling)
+
 
 void load_cube_mesh_data(void) {
     FILE* file = fopen("/Users/brandondiaz/CLionProjects/practica3/cmake-build-debug/cube.obj", "r");
@@ -85,28 +89,32 @@ void process_input(void) {
     switch (event.type) {
         case SDL_QUIT:
             is_running = false;
-            break;
+        break;
         case SDL_KEYDOWN:
             if (event.key.keysym.sym == SDLK_ESCAPE) {
                 is_running = false;
             }
-            // Alternar renderizado de triángulos
+        // Alternar renderizado de triángulos
             else if (event.key.keysym.sym == SDLK_f) {
                 render_triangles = !render_triangles;
             }
-            // Alternar visualización de vértices
+        // Alternar visualización de vértices
             else if (event.key.keysym.sym == SDLK_v) {
                 render_vertices = !render_vertices;
             }
-            // Alternar visualización de aristas
+        // Alternar visualización de aristas
             else if (event.key.keysym.sym == SDLK_l) {
                 render_edges = !render_edges;
             }
-            // Alternar entre proyección perspectiva y ortográfica
+        // Alternar entre proyección perspectiva y ortográfica
             else if (event.key.keysym.sym == SDLK_p) {
                 perspective_projection = !perspective_projection;
             }
-            break;
+        // Alternar Flat Shading
+            else if (event.key.keysym.sym == SDLK_s) {
+                use_flat_shading = !use_flat_shading;
+            }
+        break;
     }
 
     // Asegurar que siempre haya algo visible en pantalla
@@ -114,6 +122,7 @@ void process_input(void) {
         render_triangles = true;
     }
 }
+
 
 vec2_t project(vec3_t v3) {
     vec2_t projected_point;
@@ -162,8 +171,10 @@ void update(void) {
     world_matrix = mat4_mul_mat4(translation_matrix, world_matrix);
 
     // Dirección de la luz
-    vec3_t light_dir = {0, 0, 1};
+    vec3_t light_dir = {1, 0, 0};
     vec3_normalize(&light_dir); // Normalizar dirección de la luz
+
+    vec3_normalize(&camera_dir); // Normalizar dirección de la cámara
 
     light_t light = { .direction = light_dir };
 
@@ -199,10 +210,13 @@ void update(void) {
         vec3_t normal = vec3_cross(ab, ac);
         vec3_normalize(&normal); // Normalizar la normal
 
-        // Calcular la intensidad de luz
-        float light_intensity = -vec3_dot(normal, light.direction);
+        // Back-face Culling con cámara
+        float backface_culling_factor = vec3_dot(normal, camera_dir);
+        if (backface_culling_factor > 0) continue; // Ignorar triángulos orientados hacia atrás
 
-        if (light_intensity < 0) continue; // Ignorar triángulos orientados hacia atrás
+        // Calcular la intensidad de luz (Flat Shading)
+        float light_intensity = -vec3_dot(normal, light.direction);
+        if (use_flat_shading && light_intensity < 0) light_intensity = 0; // No intensidad negativa
 
         // Proyectar los puntos
         for (int j = 0; j < 3; j++) {
@@ -219,8 +233,12 @@ void update(void) {
             .depth = (a.z + b.z + c.z) / 3
         };
 
-        // Aplicar flat shading
-        triangle.color = light_apply_intensity(0xFFFFFF, light_intensity);
+        // Aplicar flat shading si está habilitado
+        if (use_flat_shading) {
+            triangle.color = light_apply_intensity(0xFFFFFF, light_intensity);
+        } else {
+            triangle.color = 0xFFFFFF; // Color base sin shading
+        }
 
         array_push(ArrayTriangle, triangle);
     }
